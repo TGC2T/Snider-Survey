@@ -1,390 +1,356 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDoc 
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken,
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  ChevronRight, 
-  ChevronLeft, 
-  CheckCircle2, 
-  Send, 
-  Star, 
-  Circle,
-  Sparkles,
-  MousePointer2,
-  ShieldCheck
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Pro Feedback</title>
+    
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (Translates React JSX so the browser understands it) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-// --- FIREBASE SETUP ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'survey-pro';
-
-/**
- * SURVEY CONFIGURATION
- */
-const SURVEY_CONFIG = {
-  title: "Vision Pro Feedback",
-  description: "Experience the future of feedback with our immersive interface.",
-  questions: [
-    { id: "q1", type: "text", question: "What impressed you most today?", placeholder: "Share your thoughts...", required: true },
-    { id: "q2", type: "choice", question: "Preferred Interaction Mode?", options: ["Eye Tracking", "Hand Gestures", "Voice Command", "Physical Controller"], required: true },
-    { id: "q3", type: "rating", question: "Immersion Quality", maxRating: 5, required: true },
-    { id: "q4", type: "text", question: "Any additional notes?", placeholder: "Optional...", required: false }
-  ]
-};
-
-// --- HELPER: PARTICLES COMPONENT ---
-const ParticleBackground = () => {
-  const canvasRef = useRef(null);
-  
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let animationFrameId;
-    let particles = [];
-
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-
-    class Particle {
-      constructor() {
-        this.x = Math.random() * canvas.width;
-        this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 2 + 0.5;
-        this.speedX = Math.random() * 0.4 - 0.2;
-        this.speedY = Math.random() * 0.4 - 0.2;
-        this.opacity = Math.random() * 0.4 + 0.1;
-      }
-      update() {
-        this.x += this.speedX;
-        this.y += this.speedY;
-        if (this.x > canvas.width) this.x = 0;
-        if (this.x < 0) this.x = canvas.width;
-        if (this.y > canvas.height) this.y = 0;
-        if (this.y < 0) this.y = canvas.height;
-      }
-      draw() {
-        ctx.fillStyle = `rgba(129, 140, 248, ${this.opacity})`;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    const init = () => {
-      particles = [];
-      for (let i = 0; i < 80; i++) particles.push(new Particle());
-    };
-
-    const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      particles.forEach(p => {
-        p.update();
-        p.draw();
-      });
-      animationFrameId = requestAnimationFrame(animate);
-    };
-
-    window.addEventListener('resize', resize);
-    resize();
-    init();
-    animate();
-
-    return () => {
-      window.removeEventListener('resize', resize);
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />;
-};
-
-const App = () => {
-  const [user, setUser] = useState(null);
-  const [currentIndex, setCurrentIndex] = useState(-1);
-  const [answers, setAnswers] = useState({});
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [hasTakenBefore, setHasTakenBefore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        // Core Principle: Check for custom token first, then fall back to anonymous
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
+    <style>
+        body { 
+            background-color: #050505; 
+            color: white; 
+            margin: 0; 
+            overflow-x: hidden;
         }
-      } catch (e) {
-        console.error("Auth error", e);
-        setLoading(false);
-      }
-    };
-    initAuth();
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        setUser(u);
-        const submissionRef = doc(db, 'artifacts', appId, 'public', 'data', 'submissions', u.uid);
-        try {
-          const docSnap = await getDoc(submissionRef);
-          if (docSnap.exists()) {
-            setHasTakenBefore(true);
-          }
-        } catch (e) {
-          console.error("Firestore check failed", e);
-        }
-        setLoading(false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-  const totalQuestions = SURVEY_CONFIG.questions.length;
-  const currentQuestion = SURVEY_CONFIG.questions[currentIndex];
-  const progress = currentIndex === -1 ? 0 : ((currentIndex + 1) / totalQuestions) * 100;
+        // --- INLINE ICONS (Replacing lucide-react for standalone compatibility) ---
+        const ChevronRight = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"/></svg>;
+        const ChevronLeft = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>;
+        const CheckCircle2 = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>;
+        const Send = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>;
+        const Star = ({size=24, fill="none", strokeWidth=2, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
+        const CircleIcon = ({size=24, fill="none", className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/></svg>;
+        const Sparkles = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>;
+        const MousePointer2 = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m4 4 7.07 17 2.51-7.39L21 11.07z"/></svg>;
+        const ShieldCheck = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>;
 
-  const handleNext = () => {
-    if (currentIndex === -1) {
-      if (hasTakenBefore) {
-        setError("You have already completed this survey.");
-        return;
-      }
-      setCurrentIndex(0);
-      return;
-    }
+        // --- SURVEY CONFIGURATION ---
+        const SURVEY_CONFIG = {
+            title: "Vision Pro Feedback",
+            description: "Experience the future of feedback with our immersive interface.",
+            questions: [
+                { id: "q1", type: "text", question: "What impressed you most today?", placeholder: "Share your thoughts...", required: true },
+                { id: "q2", type: "choice", question: "Preferred Interaction Mode?", options: ["Eye Tracking", "Hand Gestures", "Voice Command", "Physical Controller"], required: true },
+                { id: "q3", type: "rating", question: "Immersion Quality", maxRating: 5, required: true },
+                { id: "q4", type: "text", question: "Any additional notes?", placeholder: "Optional...", required: false }
+            ]
+        };
 
-    if (currentQuestion.required && !answers[currentQuestion.id]) {
-      setError("Please provide an answer to continue.");
-      return;
-    }
-
-    setError("");
-    if (currentIndex < totalQuestions - 1) {
-      setCurrentIndex(prev => prev + 1);
-    } else {
-      submitSurvey();
-    }
-  };
-
-  const handleBack = () => {
-    if (currentIndex > -1) {
-      setCurrentIndex(prev => prev - 1);
-      setError("");
-    }
-  };
-
-  const updateAnswer = (val) => {
-    setAnswers(prev => ({ ...prev, [currentQuestion.id]: val }));
-    setError("");
-  };
-
-  const submitSurvey = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', user.uid), {
-        answers,
-        timestamp: new Date().toISOString(),
-        userId: user.uid
-      });
-      setIsSubmitted(true);
-    } catch (err) {
-      setError("Failed to save. Please check your connection.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading && !isSubmitted) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans overflow-x-hidden selection:bg-indigo-500/30">
-      <ParticleBackground />
-
-      <main className="relative z-10 min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-xl relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 to-purple-600/20 rounded-[2.5rem] blur-2xl transition duration-1000 group-hover:opacity-100 opacity-50"></div>
-          
-          <div className="relative bg-[#0f0f12]/60 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden">
+        // --- HELPER: PARTICLES COMPONENT ---
+        const ParticleBackground = () => {
+            const canvasRef = useRef(null);
             
-            {!isSubmitted && currentIndex >= 0 && (
-              <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
-                <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            )}
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                let animationFrameId;
+                let particles = [];
 
-            <div className="p-8 md:p-14">
-              {hasTakenBefore && !isSubmitted ? (
-                <div className="text-center space-y-6 py-10">
-                  <div className="w-20 h-20 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto border border-amber-500/20 backdrop-blur-md">
-                    <ShieldCheck size={40} />
-                  </div>
-                  <h1 className="text-3xl font-bold tracking-tight">Access Restricted</h1>
-                  <p className="text-slate-400">Our records show you've already completed this experience. Thank you!</p>
-                </div>
-              ) : isSubmitted ? (
-                <div className="text-center space-y-6 py-10 animate-in zoom-in duration-700">
-                  <div className="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.2)] backdrop-blur-md">
-                    <CheckCircle2 size={44} />
-                  </div>
-                  <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">Thank You</h1>
-                  <p className="text-slate-400 text-lg">Your response has been securely recorded.</p>
-                </div>
-              ) : currentIndex === -1 ? (
-                <div className="text-center space-y-8 py-4 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold text-indigo-300 tracking-widest uppercase backdrop-blur-md">
-                    <Sparkles size={12} /> Live Preview
-                  </div>
-                  <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-b from-white to-white/50 bg-clip-text text-transparent leading-tight">
-                    {SURVEY_CONFIG.title}
-                  </h1>
-                  <p className="text-slate-400 text-lg max-w-sm mx-auto font-light leading-relaxed">
-                    {SURVEY_CONFIG.description}
-                  </p>
-                  <button
-                    onClick={handleNext}
-                    className="group relative w-full sm:w-auto px-10 py-5 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl font-bold transition-all hover:bg-white/20 hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 overflow-hidden shadow-xl mt-4"
-                  >
-                    Start Experience <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-10 animate-in fade-in duration-500">
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Step {currentIndex + 1} of {totalQuestions}</span>
-                    <h2 className="text-3xl font-medium text-white tracking-tight leading-snug">
-                      {currentQuestion.question}
-                    </h2>
-                  </div>
+                const resize = () => {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                };
 
-                  <div className="min-h-[160px]">
-                    {currentQuestion.type === 'text' && (
-                      <textarea
-                        autoFocus
-                        className="w-full p-6 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 outline-none transition-all resize-none h-40 text-lg placeholder:text-white/10 shadow-inner"
-                        placeholder={currentQuestion.placeholder}
-                        value={answers[currentQuestion.id] || ""}
-                        onChange={(e) => updateAnswer(e.target.value)}
-                      />
-                    )}
+                class Particle {
+                    constructor() {
+                        this.x = Math.random() * canvas.width;
+                        this.y = Math.random() * canvas.height;
+                        this.size = Math.random() * 2 + 0.5;
+                        this.speedX = Math.random() * 0.4 - 0.2;
+                        this.speedY = Math.random() * 0.4 - 0.2;
+                        this.opacity = Math.random() * 0.4 + 0.1;
+                    }
+                    update() {
+                        this.x += this.speedX;
+                        this.y += this.speedY;
+                        if (this.x > canvas.width) this.x = 0;
+                        if (this.x < 0) this.x = canvas.width;
+                        if (this.y > canvas.height) this.y = 0;
+                        if (this.y < 0) this.y = canvas.height;
+                    }
+                    draw() {
+                        ctx.fillStyle = `rgba(129, 140, 248, ${this.opacity})`;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
 
-                    {currentQuestion.type === 'choice' && (
-                      <div className="grid gap-3">
-                        {currentQuestion.options.map((option) => (
-                          <button
-                            key={option}
-                            onClick={() => updateAnswer(option)}
-                            className={`group flex items-center justify-between p-5 rounded-2xl border backdrop-blur-sm transition-all text-left ${
-                              answers[currentQuestion.id] === option
-                                ? "bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]"
-                                : "bg-white/[0.03] border-white/10 text-white/60 hover:bg-white/[0.08] hover:border-white/20"
-                            }`}
-                          >
-                            <span className="font-medium text-lg">{option}</span>
-                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
-                               answers[currentQuestion.id] === option ? "border-black/20 bg-black/5" : "border-white/20"
-                            }`}>
-                               {answers[currentQuestion.id] === option && <div className="w-2 h-2 bg-black rounded-full" />}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                const init = () => {
+                    particles = [];
+                    for (let i = 0; i < 80; i++) particles.push(new Particle());
+                };
 
-                    {currentQuestion.type === 'rating' && (
-                      <div className="flex justify-between gap-2 max-w-sm mx-auto w-full py-8">
-                        {[...Array(currentQuestion.maxRating)].map((_, i) => {
-                          const active = (answers[currentQuestion.id] || 0) > i;
-                          return (
-                            <button
-                              key={i}
-                              onClick={() => updateAnswer(i + 1)}
-                              className={`flex flex-col items-center gap-3 transition-all transform hover:scale-110 active:scale-90 ${
-                                active ? "text-indigo-400" : "text-white/10 hover:text-white/30"
-                              }`}
-                            >
-                              <div className={`p-3 rounded-full transition-all ${active ? "bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.2)]" : "bg-transparent"}`}>
-                                <Star size={40} fill={active ? "currentColor" : "none"} strokeWidth={active ? 0 : 1.5} />
-                              </div>
-                              <span className={`text-[10px] font-bold ${active ? "text-indigo-400" : "text-white/20"}`}>{i + 1}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                const animate = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    particles.forEach(p => {
+                        p.update();
+                        p.draw();
+                    });
+                    animationFrameId = requestAnimationFrame(animate);
+                };
 
-                  {error && (
-                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm flex items-center gap-2 backdrop-blur-md">
-                       <Circle size={6} fill="currentColor" /> {error}
+                window.addEventListener('resize', resize);
+                resize();
+                init();
+                animate();
+
+                return () => {
+                    window.removeEventListener('resize', resize);
+                    cancelAnimationFrame(animationFrameId);
+                };
+            }, []);
+
+            return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />;
+        };
+
+        // --- MAIN APPLICATION ---
+        const App = () => {
+            const [currentIndex, setCurrentIndex] = useState(-1);
+            const [answers, setAnswers] = useState({});
+            const [isSubmitted, setIsSubmitted] = useState(false);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState("");
+
+            const totalQuestions = SURVEY_CONFIG.questions.length;
+            const currentQuestion = SURVEY_CONFIG.questions[currentIndex];
+            const progress = currentIndex === -1 ? 0 : ((currentIndex + 1) / totalQuestions) * 100;
+
+            const handleNext = () => {
+                if (currentIndex === -1) {
+                    setCurrentIndex(0);
+                    return;
+                }
+
+                if (currentQuestion.required && !answers[currentQuestion.id]) {
+                    setError("Please provide an answer to continue.");
+                    return;
+                }
+
+                setError("");
+                if (currentIndex < totalQuestions - 1) {
+                    setCurrentIndex(prev => prev + 1);
+                } else {
+                    submitSurvey();
+                }
+            };
+
+            const handleBack = () => {
+                if (currentIndex > -1) {
+                    setCurrentIndex(prev => prev - 1);
+                    setError("");
+                }
+            };
+
+            const updateAnswer = (val) => {
+                setAnswers(prev => ({ ...prev, [currentQuestion.id]: val }));
+                setError("");
+            };
+
+            const submitSurvey = async () => {
+                setLoading(true);
+                try {
+                    // Simulate a network delay for the user experience
+                    await new Promise(resolve => setTimeout(resolve, 1200));
+                    
+                    // In Standalone Mode, we just log to the console instead of a database
+                    console.log("Survey successfully completed! Answers:", answers);
+                    
+                    setIsSubmitted(true);
+                } catch (err) {
+                    setError("An error occurred. Please try again.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading && !isSubmitted) {
+                return (
+                    <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+                        <div className="w-10 h-10 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
                     </div>
-                  )}
+                );
+            }
 
-                  <div className="flex items-center justify-between pt-8 border-t border-white/5">
-                    <button
-                      onClick={handleBack}
-                      className="flex items-center gap-2 text-white/30 hover:text-white/60 font-medium transition-all group px-4 py-2 rounded-xl hover:bg-white/5 backdrop-blur-sm"
-                    >
-                      <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back
-                    </button>
-                    <button
-                      onClick={handleNext}
-                      className="px-8 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl font-bold transition-all hover:bg-white/20 hover:scale-[1.05] active:scale-95 flex items-center gap-2 shadow-[0_10px_20px_rgba(0,0,0,0.3)]"
-                    >
-                      {currentIndex === totalQuestions - 1 ? (
-                        <>Submit <Send size={18} /></>
-                      ) : (
-                        <>Next <ChevronRight size={18} /></>
-                      )}
-                    </button>
-                  </div>
+            return (
+                <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-indigo-500/30 flex flex-col">
+                    <ParticleBackground />
+
+                    <main className="relative z-10 flex-grow flex items-center justify-center p-6">
+                        <div className="w-full max-w-xl relative group">
+                            {/* Subtle Outer Glow */}
+                            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 to-purple-600/20 rounded-[2.5rem] blur-2xl transition duration-1000 group-hover:opacity-100 opacity-50"></div>
+                            
+                            <div className="relative bg-[#0f0f12]/60 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden">
+                                
+                                {!isSubmitted && currentIndex >= 0 && (
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                                            style={{ width: `${progress}%` }}
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="p-8 md:p-14">
+                                    {isSubmitted ? (
+                                        <div className="text-center space-y-6 py-10 transition-all duration-700 transform scale-100 opacity-100">
+                                            <div className="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.2)] backdrop-blur-md">
+                                                <CheckCircle2 size={44} />
+                                            </div>
+                                            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">Thank You</h1>
+                                            <p className="text-slate-400 text-lg">Your response has been securely recorded.</p>
+                                        </div>
+                                    ) : currentIndex === -1 ? (
+                                        <div className="text-center space-y-8 py-4 transition-all duration-1000 opacity-100 translate-y-0">
+                                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold text-indigo-300 tracking-widest uppercase backdrop-blur-md">
+                                                <Sparkles size={12} /> Standalone Mode
+                                            </div>
+                                            <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-b from-white to-white/50 bg-clip-text text-transparent leading-tight">
+                                                {SURVEY_CONFIG.title}
+                                            </h1>
+                                            <p className="text-slate-400 text-lg max-w-sm mx-auto font-light leading-relaxed">
+                                                {SURVEY_CONFIG.description}
+                                            </p>
+                                            <button
+                                                onClick={handleNext}
+                                                className="group relative w-full sm:w-auto px-10 py-5 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl font-bold transition-all hover:bg-white/20 hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 overflow-hidden shadow-xl mt-4 mx-auto"
+                                            >
+                                                Start Experience <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-10 transition-all duration-500 opacity-100">
+                                            <div className="space-y-2">
+                                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Step {currentIndex + 1} of {totalQuestions}</span>
+                                                <h2 className="text-3xl font-medium text-white tracking-tight leading-snug">
+                                                    {currentQuestion.question}
+                                                </h2>
+                                            </div>
+
+                                            <div className="min-h-[160px]">
+                                                {currentQuestion.type === 'text' && (
+                                                    <textarea
+                                                        autoFocus
+                                                        className="w-full p-6 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 outline-none transition-all resize-none h-40 text-lg placeholder:text-white/10 shadow-inner"
+                                                        placeholder={currentQuestion.placeholder}
+                                                        value={answers[currentQuestion.id] || ""}
+                                                        onChange={(e) => updateAnswer(e.target.value)}
+                                                    />
+                                                )}
+
+                                                {currentQuestion.type === 'choice' && (
+                                                    <div className="grid gap-3">
+                                                        {currentQuestion.options.map((option) => (
+                                                            <button
+                                                                key={option}
+                                                                onClick={() => updateAnswer(option)}
+                                                                className={`group flex items-center justify-between p-5 rounded-2xl border backdrop-blur-sm transition-all text-left ${
+                                                                    answers[currentQuestion.id] === option
+                                                                        ? "bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+                                                                        : "bg-white/[0.03] border-white/10 text-white/60 hover:bg-white/[0.08] hover:border-white/20"
+                                                                }`}
+                                                            >
+                                                                <span className="font-medium text-lg">{option}</span>
+                                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                                                                    answers[currentQuestion.id] === option ? "border-black/20 bg-black/5" : "border-white/20"
+                                                                }`}>
+                                                                    {answers[currentQuestion.id] === option && <div className="w-2 h-2 bg-black rounded-full" />}
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {currentQuestion.type === 'rating' && (
+                                                    <div className="flex justify-between gap-2 max-w-sm mx-auto w-full py-8">
+                                                        {[...Array(currentQuestion.maxRating)].map((_, i) => {
+                                                            const active = (answers[currentQuestion.id] || 0) > i;
+                                                            return (
+                                                                <button
+                                                                    key={i}
+                                                                    onClick={() => updateAnswer(i + 1)}
+                                                                    className={`flex flex-col items-center gap-3 transition-all transform hover:scale-110 active:scale-90 ${
+                                                                        active ? "text-indigo-400" : "text-white/10 hover:text-white/30"
+                                                                    }`}
+                                                                >
+                                                                    <div className={`p-3 rounded-full transition-all ${active ? "bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.2)]" : "bg-transparent"}`}>
+                                                                        <Star size={40} fill={active ? "currentColor" : "none"} strokeWidth={active ? 0 : 1.5} />
+                                                                    </div>
+                                                                    <span className={`text-[10px] font-bold ${active ? "text-indigo-400" : "text-white/20"}`}>{i + 1}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {error && (
+                                                <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm flex items-center gap-2 backdrop-blur-md">
+                                                    <CircleIcon size={16} fill="currentColor" className="text-red-400" /> {error}
+                                                </div>
+                                            )}
+
+                                            <div className="flex items-center justify-between pt-8 border-t border-white/5">
+                                                <button
+                                                    onClick={handleBack}
+                                                    className="flex items-center gap-2 text-white/30 hover:text-white/60 font-medium transition-all group px-4 py-2 rounded-xl hover:bg-white/5 backdrop-blur-sm"
+                                                >
+                                                    <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back
+                                                </button>
+                                                <button
+                                                    onClick={handleNext}
+                                                    className="px-8 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl font-bold transition-all hover:bg-white/20 hover:scale-[1.05] active:scale-95 flex items-center gap-2 shadow-[0_10px_20px_rgba(0,0,0,0.3)]"
+                                                >
+                                                    {currentIndex === totalQuestions - 1 ? (
+                                                        <>Submit <Send size={18} /></>
+                                                    ) : (
+                                                        <>Next <ChevronRight size={18} /></>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+
+                    <footer className="pb-8 w-full z-20 flex justify-center pointer-events-none mt-auto">
+                        <div className="px-6 py-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-6 text-[10px] uppercase tracking-widest font-black text-white/20 pointer-events-auto">
+                            <div className="flex items-center gap-2 text-indigo-400/50">
+                                <MousePointer2 size={12} /> Precision UI
+                            </div>
+                            <div className="w-1 h-1 bg-white/10 rounded-full" />
+                            <div className="flex items-center gap-2">
+                                Encrypted <ShieldCheck size={12} />
+                            </div>
+                        </div>
+                    </footer>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </main>
+            );
+        };
 
-      <footer className="fixed bottom-8 left-0 w-full z-20 flex justify-center pointer-events-none">
-        <div className="px-6 py-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-6 text-[10px] uppercase tracking-widest font-black text-white/20 pointer-events-auto">
-          <div className="flex items-center gap-2 text-indigo-400/50">
-            <MousePointer2 size={12} /> Precision UI
-          </div>
-          <div className="w-1 h-1 bg-white/10 rounded-full" />
-          <div className="flex items-center gap-2">
-            Encrypted <ShieldCheck size={12} />
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-};
-
-export default App;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
