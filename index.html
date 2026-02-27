@@ -1,19 +1,15 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
   doc, 
   setDoc, 
-  getDoc, 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs 
+  getDoc 
 } from 'firebase/firestore';
 import { 
   getAuth, 
   signInAnonymously, 
+  signInWithCustomToken,
   onAuthStateChanged 
 } from 'firebase/auth';
 import { 
@@ -55,6 +51,7 @@ const ParticleBackground = () => {
   
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let animationFrameId;
     let particles = [];
@@ -69,9 +66,9 @@ const ParticleBackground = () => {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
         this.size = Math.random() * 2 + 0.5;
-        this.speedX = Math.random() * 0.5 - 0.25;
-        this.speedY = Math.random() * 0.5 - 0.25;
-        this.opacity = Math.random() * 0.5 + 0.2;
+        this.speedX = Math.random() * 0.4 - 0.2;
+        this.speedY = Math.random() * 0.4 - 0.2;
+        this.opacity = Math.random() * 0.4 + 0.1;
       }
       update() {
         this.x += this.speedX;
@@ -91,7 +88,7 @@ const ParticleBackground = () => {
 
     const init = () => {
       particles = [];
-      for (let i = 0; i < 60; i++) particles.push(new Particle());
+      for (let i = 0; i < 80; i++) particles.push(new Particle());
     };
 
     const animate = () => {
@@ -126,21 +123,33 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // 1. Auth & Check Previous Submission
   useEffect(() => {
-    const init = async () => {
-      await signInAnonymously(auth);
+    const initAuth = async () => {
+      try {
+        // Core Principle: Check for custom token first, then fall back to anonymous
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) {
+        console.error("Auth error", e);
+        setLoading(false);
+      }
     };
-    init();
+    initAuth();
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u);
-        // Check if this UID has already submitted in the public data
         const submissionRef = doc(db, 'artifacts', appId, 'public', 'data', 'submissions', u.uid);
-        const docSnap = await getDoc(submissionRef);
-        if (docSnap.exists()) {
-          setHasTakenBefore(true);
+        try {
+          const docSnap = await getDoc(submissionRef);
+          if (docSnap.exists()) {
+            setHasTakenBefore(true);
+          }
+        } catch (e) {
+          console.error("Firestore check failed", e);
         }
         setLoading(false);
       }
@@ -183,7 +192,7 @@ const App = () => {
   };
 
   const updateAnswer = (val) => {
-    setAnswers({ ...answers, [currentQuestion.id]: val });
+    setAnswers(prev => ({ ...prev, [currentQuestion.id]: val }));
     setError("");
   };
 
@@ -191,7 +200,6 @@ const App = () => {
     if (!user) return;
     setLoading(true);
     try {
-      // Save submission linked to User ID to prevent duplicates
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', user.uid), {
         answers,
         timestamp: new Date().toISOString(),
@@ -208,56 +216,53 @@ const App = () => {
   if (loading && !isSubmitted) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white selection:bg-indigo-500/30 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-[#050505] text-white font-sans overflow-x-hidden selection:bg-indigo-500/30">
       <ParticleBackground />
 
       <main className="relative z-10 min-h-screen flex items-center justify-center p-6">
-        {/* Main Card with Glassmorphism */}
         <div className="w-full max-w-xl relative group">
-          {/* Parallax Glow Effect */}
-          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[2.5rem] blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 to-purple-600/20 rounded-[2.5rem] blur-2xl transition duration-1000 group-hover:opacity-100 opacity-50"></div>
           
-          <div className="relative bg-[#0f0f12]/80 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden">
+          <div className="relative bg-[#0f0f12]/60 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden">
             
-            {/* Progress Bar */}
             {!isSubmitted && currentIndex >= 0 && (
               <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
                 <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 ease-in-out"
+                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
                   style={{ width: `${progress}%` }}
                 />
               </div>
             )}
 
-            <div className="p-10 md:p-14">
+            <div className="p-8 md:p-14">
               {hasTakenBefore && !isSubmitted ? (
-                <div className="text-center space-y-6">
-                   <div className="w-20 h-20 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-amber-500/20">
+                <div className="text-center space-y-6 py-10">
+                  <div className="w-20 h-20 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto border border-amber-500/20 backdrop-blur-md">
                     <ShieldCheck size={40} />
                   </div>
                   <h1 className="text-3xl font-bold tracking-tight">Access Restricted</h1>
-                  <p className="text-slate-400">Our records show you've already completed this experience. Thank you for your participation!</p>
+                  <p className="text-slate-400">Our records show you've already completed this experience. Thank you!</p>
                 </div>
               ) : isSubmitted ? (
-                <div className="text-center space-y-6 animate-in zoom-in duration-700">
-                  <div className="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-8 border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
+                <div className="text-center space-y-6 py-10 animate-in zoom-in duration-700">
+                  <div className="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.2)] backdrop-blur-md">
                     <CheckCircle2 size={44} />
                   </div>
-                  <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">Transmission Complete</h1>
-                  <p className="text-slate-400 text-lg leading-relaxed">Your data has been encrypted and synced to our secure feedback vault.</p>
+                  <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">Thank You</h1>
+                  <p className="text-slate-400 text-lg">Your response has been securely recorded.</p>
                 </div>
               ) : currentIndex === -1 ? (
-                <div className="text-center space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-medium text-indigo-300 mb-4 tracking-widest uppercase">
+                <div className="text-center space-y-8 py-4 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold text-indigo-300 tracking-widest uppercase backdrop-blur-md">
                     <Sparkles size={12} /> Live Preview
                   </div>
-                  <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-b from-white to-white/50 bg-clip-text text-transparent leading-[1.1]">
+                  <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-b from-white to-white/50 bg-clip-text text-transparent leading-tight">
                     {SURVEY_CONFIG.title}
                   </h1>
                   <p className="text-slate-400 text-lg max-w-sm mx-auto font-light leading-relaxed">
@@ -265,28 +270,25 @@ const App = () => {
                   </p>
                   <button
                     onClick={handleNext}
-                    className="group relative w-full sm:w-auto px-10 py-5 bg-white text-black rounded-2xl font-bold transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 overflow-hidden shadow-xl"
+                    className="group relative w-full sm:w-auto px-10 py-5 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl font-bold transition-all hover:bg-white/20 hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 overflow-hidden shadow-xl mt-4"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 opacity-0 group-hover:opacity-10 transition-opacity"></div>
-                    Get Started <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                    Start Experience <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
                   </button>
                 </div>
               ) : (
                 <div className="space-y-10 animate-in fade-in duration-500">
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-end">
-                       <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Step {currentIndex + 1} // {totalQuestions}</span>
-                    </div>
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Step {currentIndex + 1} of {totalQuestions}</span>
                     <h2 className="text-3xl font-medium text-white tracking-tight leading-snug">
                       {currentQuestion.question}
                     </h2>
                   </div>
 
-                  <div className="min-h-[160px] flex flex-col justify-center">
+                  <div className="min-h-[160px]">
                     {currentQuestion.type === 'text' && (
                       <textarea
                         autoFocus
-                        className="w-full p-6 bg-white/[0.03] border border-white/10 rounded-2xl focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500/50 outline-none transition-all resize-none h-40 text-lg placeholder:text-white/20"
+                        className="w-full p-6 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 outline-none transition-all resize-none h-40 text-lg placeholder:text-white/10 shadow-inner"
                         placeholder={currentQuestion.placeholder}
                         value={answers[currentQuestion.id] || ""}
                         onChange={(e) => updateAnswer(e.target.value)}
@@ -294,22 +296,22 @@ const App = () => {
                     )}
 
                     {currentQuestion.type === 'choice' && (
-                      <div className="grid gap-4">
+                      <div className="grid gap-3">
                         {currentQuestion.options.map((option) => (
                           <button
                             key={option}
                             onClick={() => updateAnswer(option)}
-                            className={`group flex items-center justify-between p-5 rounded-2xl border transition-all text-left ${
+                            className={`group flex items-center justify-between p-5 rounded-2xl border backdrop-blur-sm transition-all text-left ${
                               answers[currentQuestion.id] === option
-                                ? "bg-white text-black border-white"
-                                : "bg-white/[0.02] border-white/10 text-white/60 hover:bg-white/[0.05] hover:border-white/20"
+                                ? "bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+                                : "bg-white/[0.03] border-white/10 text-white/60 hover:bg-white/[0.08] hover:border-white/20"
                             }`}
                           >
                             <span className="font-medium text-lg">{option}</span>
-                            <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
                                answers[currentQuestion.id] === option ? "border-black/20 bg-black/5" : "border-white/20"
                             }`}>
-                               {answers[currentQuestion.id] === option && <div className="w-2.5 h-2.5 bg-black rounded-full" />}
+                               {answers[currentQuestion.id] === option && <div className="w-2 h-2 bg-black rounded-full" />}
                             </div>
                           </button>
                         ))}
@@ -317,7 +319,7 @@ const App = () => {
                     )}
 
                     {currentQuestion.type === 'rating' && (
-                      <div className="flex justify-between gap-2 max-w-sm mx-auto w-full">
+                      <div className="flex justify-between gap-2 max-w-sm mx-auto w-full py-8">
                         {[...Array(currentQuestion.maxRating)].map((_, i) => {
                           const active = (answers[currentQuestion.id] || 0) > i;
                           return (
@@ -328,11 +330,9 @@ const App = () => {
                                 active ? "text-indigo-400" : "text-white/10 hover:text-white/30"
                               }`}
                             >
-                              <Star 
-                                size={44} 
-                                fill={active ? "currentColor" : "none"} 
-                                strokeWidth={active ? 0 : 1.5}
-                              />
+                              <div className={`p-3 rounded-full transition-all ${active ? "bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.2)]" : "bg-transparent"}`}>
+                                <Star size={40} fill={active ? "currentColor" : "none"} strokeWidth={active ? 0 : 1.5} />
+                              </div>
                               <span className={`text-[10px] font-bold ${active ? "text-indigo-400" : "text-white/20"}`}>{i + 1}</span>
                             </button>
                           );
@@ -342,26 +342,26 @@ const App = () => {
                   </div>
 
                   {error && (
-                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-2 rounded-xl text-sm flex items-center gap-2 animate-pulse">
-                       <Circle size={8} fill="currentColor" /> {error}
+                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm flex items-center gap-2 backdrop-blur-md">
+                       <Circle size={6} fill="currentColor" /> {error}
                     </div>
                   )}
 
                   <div className="flex items-center justify-between pt-8 border-t border-white/5">
                     <button
                       onClick={handleBack}
-                      className="flex items-center gap-2 text-white/30 hover:text-white/60 font-medium transition-all group"
+                      className="flex items-center gap-2 text-white/30 hover:text-white/60 font-medium transition-all group px-4 py-2 rounded-xl hover:bg-white/5 backdrop-blur-sm"
                     >
                       <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back
                     </button>
                     <button
                       onClick={handleNext}
-                      className="px-8 py-4 bg-white text-black rounded-2xl font-bold transition-all hover:scale-[1.05] active:scale-95 flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                      className="px-8 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl font-bold transition-all hover:bg-white/20 hover:scale-[1.05] active:scale-95 flex items-center gap-2 shadow-[0_10px_20px_rgba(0,0,0,0.3)]"
                     >
                       {currentIndex === totalQuestions - 1 ? (
-                        <>Complete <Send size={18} /></>
+                        <>Submit <Send size={18} /></>
                       ) : (
-                        <>Continue <ChevronRight size={18} /></>
+                        <>Next <ChevronRight size={18} /></>
                       )}
                     </button>
                   </div>
@@ -372,15 +372,14 @@ const App = () => {
         </div>
       </main>
 
-      {/* Footer Nav */}
       <footer className="fixed bottom-8 left-0 w-full z-20 flex justify-center pointer-events-none">
-        <div className="px-6 py-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-6 text-[10px] uppercase tracking-widest font-black text-white/20 pointer-events-auto shadow-2xl">
+        <div className="px-6 py-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-6 text-[10px] uppercase tracking-widest font-black text-white/20 pointer-events-auto">
           <div className="flex items-center gap-2 text-indigo-400/50">
-            <MousePointer2 size={12} /> Interaction Design
+            <MousePointer2 size={12} /> Precision UI
           </div>
           <div className="w-1 h-1 bg-white/10 rounded-full" />
           <div className="flex items-center gap-2">
-            Encrypted Session <ShieldCheck size={12} />
+            Encrypted <ShieldCheck size={12} />
           </div>
         </div>
       </footer>
