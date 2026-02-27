@@ -12,34 +12,64 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- Babel (Translates React JSX so the browser understands it) -->
+    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        body { 
-            background-color: #050505; 
-            color: white; 
-            margin: 0; 
-            overflow-x: hidden;
-        }
+        body { background-color: #050505; color: white; margin: 0; overflow-x: hidden; }
+        /* Custom Scrollbar for Admin Panel */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f0f12; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
+    <!-- FIREBASE MODULE LOADER -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        
+        // Expose to window so standard Babel script can use it
+        window.FirebaseModule = { 
+            initializeApp, getFirestore, doc, setDoc, getDoc, collection, getDocs, 
+            getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged 
+        };
+        window.dispatchEvent(new Event('firebase-loaded'));
+    </script>
+
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- INLINE ICONS (Replacing lucide-react for standalone compatibility) ---
+        // ==========================================
+        // ⚠️ YOUR GITHUB PAGES DATABASE CONFIG ⚠️
+        // Replace these values with your Firebase Project keys to make cross-device syncing work.
+        // ==========================================
+        const GITHUB_PAGES_FIREBASE_CONFIG = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef"
+        };
+
+        // --- INLINE ICONS ---
         const ChevronRight = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"/></svg>;
         const ChevronLeft = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>;
         const CheckCircle2 = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>;
         const Send = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>;
         const Star = ({size=24, fill="none", strokeWidth=2, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
-        const CircleIcon = ({size=24, fill="none", className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/></svg>;
+        const CircleIcon = ({size=24, fill="none", className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/></svg>;
         const Sparkles = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>;
         const MousePointer2 = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m4 4 7.07 17 2.51-7.39L21 11.07z"/></svg>;
         const ShieldCheck = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>;
+        const Database = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>;
+        const Users = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+        const Clock = ({size=24, className=""}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>;
 
         // --- SURVEY CONFIGURATION ---
         const SURVEY_CONFIG = {
@@ -53,10 +83,9 @@
             ]
         };
 
-        // --- HELPER: PARTICLES COMPONENT ---
+        // --- PARTICLES COMPONENT ---
         const ParticleBackground = () => {
             const canvasRef = useRef(null);
-            
             useEffect(() => {
                 const canvas = canvasRef.current;
                 if (!canvas) return;
@@ -64,87 +93,203 @@
                 let animationFrameId;
                 let particles = [];
 
-                const resize = () => {
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
-                };
-
+                const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
                 class Particle {
                     constructor() {
-                        this.x = Math.random() * canvas.width;
-                        this.y = Math.random() * canvas.height;
+                        this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height;
                         this.size = Math.random() * 2 + 0.5;
-                        this.speedX = Math.random() * 0.4 - 0.2;
-                        this.speedY = Math.random() * 0.4 - 0.2;
+                        this.speedX = Math.random() * 0.4 - 0.2; this.speedY = Math.random() * 0.4 - 0.2;
                         this.opacity = Math.random() * 0.4 + 0.1;
                     }
                     update() {
-                        this.x += this.speedX;
-                        this.y += this.speedY;
-                        if (this.x > canvas.width) this.x = 0;
-                        if (this.x < 0) this.x = canvas.width;
-                        if (this.y > canvas.height) this.y = 0;
-                        if (this.y < 0) this.y = canvas.height;
+                        this.x += this.speedX; this.y += this.speedY;
+                        if (this.x > canvas.width) this.x = 0; if (this.x < 0) this.x = canvas.width;
+                        if (this.y > canvas.height) this.y = 0; if (this.y < 0) this.y = canvas.height;
                     }
                     draw() {
                         ctx.fillStyle = `rgba(129, 140, 248, ${this.opacity})`;
-                        ctx.beginPath();
-                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                        ctx.fill();
+                        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
                     }
                 }
-
-                const init = () => {
-                    particles = [];
-                    for (let i = 0; i < 80; i++) particles.push(new Particle());
-                };
-
+                const init = () => { particles = []; for (let i = 0; i < 80; i++) particles.push(new Particle()); };
                 const animate = () => {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    particles.forEach(p => {
-                        p.update();
-                        p.draw();
-                    });
+                    particles.forEach(p => { p.update(); p.draw(); });
                     animationFrameId = requestAnimationFrame(animate);
                 };
-
-                window.addEventListener('resize', resize);
-                resize();
-                init();
-                animate();
-
-                return () => {
-                    window.removeEventListener('resize', resize);
-                    cancelAnimationFrame(animationFrameId);
-                };
+                window.addEventListener('resize', resize); resize(); init(); animate();
+                return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(animationFrameId); };
             }, []);
-
             return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />;
         };
 
-        // --- MAIN APPLICATION ---
-        const App = () => {
+        // --- SETUP GUIDE (Shows if deployed without database keys) ---
+        const SetupInstructions = () => (
+            <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6 relative z-10">
+                <ParticleBackground />
+                <div className="max-w-2xl bg-[#0f0f12]/80 border border-red-500/30 p-8 md:p-12 rounded-[2.5rem] shadow-2xl backdrop-blur-3xl relative z-10">
+                    <div className="w-16 h-16 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mb-6 border border-red-500/30">
+                        <Database size={32} />
+                    </div>
+                    <h2 className="text-3xl font-bold text-white mb-4 tracking-tight">Database Connection Required</h2>
+                    <p className="text-slate-300 mb-8 leading-relaxed text-lg">
+                        To collect and view responses across different devices on GitHub Pages, this survey needs a place to save data. We use Firebase (it's free).
+                    </p>
+                    <div className="space-y-4 text-slate-400 bg-white/5 p-6 rounded-2xl border border-white/5">
+                        <p className="flex gap-3"><span className="text-indigo-400 font-bold">1.</span> Go to the <a href="https://console.firebase.google.com" target="_blank" className="text-white underline hover:text-indigo-300">Firebase Console</a> and create a free project.</p>
+                        <p className="flex gap-3"><span className="text-indigo-400 font-bold">2.</span> Enable <strong>Firestore Database</strong> (Start in Test Mode).</p>
+                        <p className="flex gap-3"><span className="text-indigo-400 font-bold">3.</span> Enable <strong>Anonymous Sign-in</strong> in Firebase Authentication.</p>
+                        <p className="flex gap-3"><span className="text-indigo-400 font-bold">4.</span> Open your <code>index.html</code> code, find <code>GITHUB_PAGES_FIREBASE_CONFIG</code> near the top, and replace the keys with your actual Firebase project settings.</p>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // --- ADMIN DASHBOARD ---
+        const AdminDashboard = ({ db, auth, appId }) => {
+            const [responses, setResponses] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                const load = async () => {
+                    const { signInAnonymously, signInWithCustomToken, onAuthStateChanged, collection, getDocs } = window.FirebaseModule;
+                    
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch(e) { console.error("Admin Auth Error", e); }
+
+                    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                        if (!user) return;
+                        try {
+                            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'responses');
+                            const snapshot = await getDocs(colRef);
+                            const data = [];
+                            snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
+                            // Sort newest first
+                            data.sort((a, b) => b.timestamp - a.timestamp);
+                            setResponses(data);
+                        } catch(e) {
+                            console.error("Error fetching responses", e);
+                        } finally {
+                            setLoading(false);
+                        }
+                    });
+                    return () => unsubscribe();
+                };
+                load();
+            }, [db, auth, appId]);
+
+            if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><div className="w-10 h-10 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div></div>;
+
+            return (
+                <div className="min-h-screen bg-[#050505] text-white p-6 md:p-12 relative z-10">
+                    <ParticleBackground />
+                    <div className="max-w-6xl mx-auto relative z-10">
+                        <header className="flex items-center justify-between mb-12">
+                            <div>
+                                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-white to-white/50 bg-clip-text text-transparent flex items-center gap-3">
+                                    <Database size={36} className="text-indigo-400" /> Admin Dashboard
+                                </h1>
+                                <p className="text-slate-400 mt-2">Viewing all cross-device survey submissions.</p>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white/5 px-5 py-3 rounded-2xl border border-white/10 backdrop-blur-md">
+                                <Users className="text-indigo-400" />
+                                <span className="font-bold text-xl">{responses.length}</span>
+                                <span className="text-slate-400 text-sm">Total Responses</span>
+                            </div>
+                        </header>
+
+                        {responses.length === 0 ? (
+                            <div className="bg-[#0f0f12]/60 border border-white/10 rounded-[2rem] p-16 text-center backdrop-blur-xl">
+                                <div className="w-20 h-20 bg-white/5 text-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <Clock size={40} />
+                                </div>
+                                <h3 className="text-2xl font-medium text-white mb-2">Waiting for responses</h3>
+                                <p className="text-slate-400">Share your link for people to take the survey. Responses will appear here.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {responses.map((res, i) => (
+                                    <div key={res.id} className="bg-[#0f0f12]/60 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl hover:border-indigo-500/30 transition-colors">
+                                        <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/5 text-sm">
+                                            <span className="text-white/40 font-mono">#{responses.length - i}</span>
+                                            <span className="text-indigo-400/80 bg-indigo-500/10 px-3 py-1 rounded-full text-xs font-bold">
+                                                {new Date(res.timestamp).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-5">
+                                            {SURVEY_CONFIG.questions.map(q => (
+                                                <div key={q.id}>
+                                                    <p className="text-[11px] uppercase tracking-wider text-white/30 font-bold mb-1">{q.question}</p>
+                                                    <p className="text-white/90 font-medium">
+                                                        {res.answers[q.id] || <span className="text-white/20 italic">Skipped</span>}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN SURVEY APP ---
+        const SurveyApp = ({ db, auth, appId }) => {
             const [currentIndex, setCurrentIndex] = useState(-1);
             const [answers, setAnswers] = useState({});
             const [isSubmitted, setIsSubmitted] = useState(false);
-            const [loading, setLoading] = useState(false);
+            const [hasAlreadySubmitted, setHasAlreadySubmitted] = useState(false);
+            const [loading, setLoading] = useState(true);
             const [error, setError] = useState("");
 
             const totalQuestions = SURVEY_CONFIG.questions.length;
             const currentQuestion = SURVEY_CONFIG.questions[currentIndex];
             const progress = currentIndex === -1 ? 0 : ((currentIndex + 1) / totalQuestions) * 100;
 
+            // Initialize Auth and check if user already submitted
+            useEffect(() => {
+                const init = async () => {
+                    const { signInAnonymously, signInWithCustomToken, onAuthStateChanged, doc, getDoc } = window.FirebaseModule;
+                    
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch(e) { console.error("Auth Error", e); }
+
+                    const unsub = onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            try {
+                                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'responses', user.uid);
+                                const snap = await getDoc(docRef);
+                                if (snap.exists()) {
+                                    setHasAlreadySubmitted(true);
+                                }
+                            } catch(e) {
+                                console.error("Check status error", e);
+                            }
+                        }
+                        setLoading(false);
+                    });
+                    return () => unsub();
+                };
+                init();
+            }, [db, auth, appId]);
+
             const handleNext = () => {
-                if (currentIndex === -1) {
-                    setCurrentIndex(0);
-                    return;
-                }
-
+                if (currentIndex === -1) { setCurrentIndex(0); return; }
                 if (currentQuestion.required && !answers[currentQuestion.id]) {
-                    setError("Please provide an answer to continue.");
-                    return;
+                    setError("Please provide an answer to continue."); return;
                 }
-
                 setError("");
                 if (currentIndex < totalQuestions - 1) {
                     setCurrentIndex(prev => prev + 1);
@@ -154,49 +299,61 @@
             };
 
             const handleBack = () => {
-                if (currentIndex > -1) {
-                    setCurrentIndex(prev => prev - 1);
-                    setError("");
-                }
+                if (currentIndex > -1) { setCurrentIndex(prev => prev - 1); setError(""); }
             };
 
             const updateAnswer = (val) => {
-                setAnswers(prev => ({ ...prev, [currentQuestion.id]: val }));
-                setError("");
+                setAnswers(prev => ({ ...prev, [currentQuestion.id]: val })); setError("");
             };
 
             const submitSurvey = async () => {
                 setLoading(true);
                 try {
-                    // Simulate a network delay for the user experience
-                    await new Promise(resolve => setTimeout(resolve, 1200));
+                    const { doc, setDoc } = window.FirebaseModule;
+                    const user = auth.currentUser;
+                    if (!user) throw new Error("Not authenticated");
                     
-                    // In Standalone Mode, we just log to the console instead of a database
-                    console.log("Survey successfully completed! Answers:", answers);
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'responses', user.uid);
+                    await setDoc(docRef, {
+                        answers: answers,
+                        timestamp: Date.now(),
+                        userId: user.uid
+                    });
                     
                     setIsSubmitted(true);
+                    setHasAlreadySubmitted(true); // Locks them out from refreshing and taking again
                 } catch (err) {
                     setError("An error occurred. Please try again.");
+                    console.error(err);
                 } finally {
                     setLoading(false);
                 }
             };
 
-            if (loading && !isSubmitted) {
+            if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><div className="w-10 h-10 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div></div>;
+
+            // Prevent multiple submissions
+            if (hasAlreadySubmitted && !isSubmitted) {
                 return (
-                    <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-                        <div className="w-10 h-10 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6 relative z-10">
+                        <ParticleBackground />
+                        <div className="w-full max-w-xl bg-[#0f0f12]/60 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-2xl p-10 md:p-14 text-center relative z-10">
+                            <div className="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-6 border border-indigo-500/30">
+                                <ShieldCheck size={40} />
+                            </div>
+                            <h2 className="text-3xl font-bold tracking-tight mb-4">You're all set!</h2>
+                            <p className="text-slate-400 text-lg">It looks like you have already submitted your feedback. Thank you for your time.</p>
+                        </div>
                     </div>
                 );
             }
 
             return (
-                <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-indigo-500/30 flex flex-col">
+                <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-indigo-500/30 flex flex-col relative z-10">
                     <ParticleBackground />
 
                     <main className="relative z-10 flex-grow flex items-center justify-center p-6">
                         <div className="w-full max-w-xl relative group">
-                            {/* Subtle Outer Glow */}
                             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 to-purple-600/20 rounded-[2.5rem] blur-2xl transition duration-1000 group-hover:opacity-100 opacity-50"></div>
                             
                             <div className="relative bg-[#0f0f12]/60 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden">
@@ -222,7 +379,7 @@
                                     ) : currentIndex === -1 ? (
                                         <div className="text-center space-y-8 py-4 transition-all duration-1000 opacity-100 translate-y-0">
                                             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold text-indigo-300 tracking-widest uppercase backdrop-blur-md">
-                                                <Sparkles size={12} /> Standalone Mode
+                                                <Sparkles size={12} /> Connected
                                             </div>
                                             <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-b from-white to-white/50 bg-clip-text text-transparent leading-tight">
                                                 {SURVEY_CONFIG.title}
@@ -248,50 +405,26 @@
 
                                             <div className="min-h-[160px]">
                                                 {currentQuestion.type === 'text' && (
-                                                    <textarea
-                                                        autoFocus
-                                                        className="w-full p-6 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 outline-none transition-all resize-none h-40 text-lg placeholder:text-white/10 shadow-inner"
-                                                        placeholder={currentQuestion.placeholder}
-                                                        value={answers[currentQuestion.id] || ""}
-                                                        onChange={(e) => updateAnswer(e.target.value)}
-                                                    />
+                                                    <textarea autoFocus className="w-full p-6 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 outline-none transition-all resize-none h-40 text-lg placeholder:text-white/10 shadow-inner" placeholder={currentQuestion.placeholder} value={answers[currentQuestion.id] || ""} onChange={(e) => updateAnswer(e.target.value)} />
                                                 )}
-
                                                 {currentQuestion.type === 'choice' && (
                                                     <div className="grid gap-3">
                                                         {currentQuestion.options.map((option) => (
-                                                            <button
-                                                                key={option}
-                                                                onClick={() => updateAnswer(option)}
-                                                                className={`group flex items-center justify-between p-5 rounded-2xl border backdrop-blur-sm transition-all text-left ${
-                                                                    answers[currentQuestion.id] === option
-                                                                        ? "bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]"
-                                                                        : "bg-white/[0.03] border-white/10 text-white/60 hover:bg-white/[0.08] hover:border-white/20"
-                                                                }`}
-                                                            >
+                                                            <button key={option} onClick={() => updateAnswer(option)} className={`group flex items-center justify-between p-5 rounded-2xl border backdrop-blur-sm transition-all text-left ${ answers[currentQuestion.id] === option ? "bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]" : "bg-white/[0.03] border-white/10 text-white/60 hover:bg-white/[0.08] hover:border-white/20" }`}>
                                                                 <span className="font-medium text-lg">{option}</span>
-                                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
-                                                                    answers[currentQuestion.id] === option ? "border-black/20 bg-black/5" : "border-white/20"
-                                                                }`}>
+                                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${ answers[currentQuestion.id] === option ? "border-black/20 bg-black/5" : "border-white/20" }`}>
                                                                     {answers[currentQuestion.id] === option && <div className="w-2 h-2 bg-black rounded-full" />}
                                                                 </div>
                                                             </button>
                                                         ))}
                                                     </div>
                                                 )}
-
                                                 {currentQuestion.type === 'rating' && (
                                                     <div className="flex justify-between gap-2 max-w-sm mx-auto w-full py-8">
                                                         {[...Array(currentQuestion.maxRating)].map((_, i) => {
                                                             const active = (answers[currentQuestion.id] || 0) > i;
                                                             return (
-                                                                <button
-                                                                    key={i}
-                                                                    onClick={() => updateAnswer(i + 1)}
-                                                                    className={`flex flex-col items-center gap-3 transition-all transform hover:scale-110 active:scale-90 ${
-                                                                        active ? "text-indigo-400" : "text-white/10 hover:text-white/30"
-                                                                    }`}
-                                                                >
+                                                                <button key={i} onClick={() => updateAnswer(i + 1)} className={`flex flex-col items-center gap-3 transition-all transform hover:scale-110 active:scale-90 ${ active ? "text-indigo-400" : "text-white/10 hover:text-white/30" }`}>
                                                                     <div className={`p-3 rounded-full transition-all ${active ? "bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.2)]" : "bg-transparent"}`}>
                                                                         <Star size={40} fill={active ? "currentColor" : "none"} strokeWidth={active ? 0 : 1.5} />
                                                                     </div>
@@ -310,21 +443,11 @@
                                             )}
 
                                             <div className="flex items-center justify-between pt-8 border-t border-white/5">
-                                                <button
-                                                    onClick={handleBack}
-                                                    className="flex items-center gap-2 text-white/30 hover:text-white/60 font-medium transition-all group px-4 py-2 rounded-xl hover:bg-white/5 backdrop-blur-sm"
-                                                >
+                                                <button onClick={handleBack} className="flex items-center gap-2 text-white/30 hover:text-white/60 font-medium transition-all group px-4 py-2 rounded-xl hover:bg-white/5 backdrop-blur-sm">
                                                     <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back
                                                 </button>
-                                                <button
-                                                    onClick={handleNext}
-                                                    className="px-8 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl font-bold transition-all hover:bg-white/20 hover:scale-[1.05] active:scale-95 flex items-center gap-2 shadow-[0_10px_20px_rgba(0,0,0,0.3)]"
-                                                >
-                                                    {currentIndex === totalQuestions - 1 ? (
-                                                        <>Submit <Send size={18} /></>
-                                                    ) : (
-                                                        <>Next <ChevronRight size={18} /></>
-                                                    )}
+                                                <button onClick={handleNext} className="px-8 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl font-bold transition-all hover:bg-white/20 hover:scale-[1.05] active:scale-95 flex items-center gap-2 shadow-[0_10px_20px_rgba(0,0,0,0.3)]">
+                                                    {currentIndex === totalQuestions - 1 ? ( <>Submit <Send size={18} /></> ) : ( <>Next <ChevronRight size={18} /></> )}
                                                 </button>
                                             </div>
                                         </div>
@@ -336,21 +459,65 @@
 
                     <footer className="pb-8 w-full z-20 flex justify-center pointer-events-none mt-auto">
                         <div className="px-6 py-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-6 text-[10px] uppercase tracking-widest font-black text-white/20 pointer-events-auto">
-                            <div className="flex items-center gap-2 text-indigo-400/50">
-                                <MousePointer2 size={12} /> Precision UI
-                            </div>
+                            <div className="flex items-center gap-2 text-indigo-400/50"><MousePointer2 size={12} /> Precision UI</div>
                             <div className="w-1 h-1 bg-white/10 rounded-full" />
-                            <div className="flex items-center gap-2">
-                                Encrypted <ShieldCheck size={12} />
-                            </div>
+                            <div className="flex items-center gap-2">Encrypted <ShieldCheck size={12} /></div>
                         </div>
                     </footer>
                 </div>
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // --- ROOT COMPONENT (Handles Database Config & Routing) ---
+        const AppRoot = () => {
+            const [route, setRoute] = useState(window.location.hash);
+
+            useEffect(() => {
+                const handleHashChange = () => setRoute(window.location.hash);
+                window.addEventListener('hashchange', handleHashChange);
+                return () => window.removeEventListener('hashchange', handleHashChange);
+            }, []);
+
+            // Check if we are running in a sandbox environment that provides its own config, 
+            // otherwise use the Github Pages config at the top of the file.
+            let activeConfig;
+            let appId = 'github-survey';
+            
+            if (typeof __firebase_config !== 'undefined') {
+                activeConfig = JSON.parse(__firebase_config);
+                appId = typeof __app_id !== 'undefined' ? __app_id : appId;
+            } else {
+                activeConfig = GITHUB_PAGES_FIREBASE_CONFIG;
+            }
+
+            const isConfigValid = activeConfig && activeConfig.apiKey && activeConfig.apiKey !== "YOUR_API_KEY";
+
+            if (!isConfigValid) {
+                return <SetupInstructions />;
+            }
+
+            const app = window.FirebaseModule.initializeApp(activeConfig);
+            const auth = window.FirebaseModule.getAuth(app);
+            const db = window.FirebaseModule.getFirestore(app);
+
+            if (route === '#admin') {
+                return <AdminDashboard db={db} auth={auth} appId={appId} />;
+            }
+
+            return <SurveyApp db={db} auth={auth} appId={appId} />;
+        };
+
+        // --- INITIALIZATION ---
+        const renderApp = () => {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<AppRoot />);
+        };
+
+        if (window.FirebaseModule) {
+            renderApp();
+        } else {
+            window.addEventListener('firebase-loaded', renderApp);
+        }
     </script>
 </body>
 </html>
